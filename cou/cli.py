@@ -20,6 +20,11 @@ import sys
 
 import cou.utils.juju as jujuutils
 import logging
+import os
+
+from cou.steps.backup import backup
+from cou.utils.upgrade_utils import get_database_app, backup_mysql
+import cou.utils.model as model
 
 from cou.utils import clean_up_libjuju_thread
 
@@ -57,8 +62,9 @@ def entrypoint() -> None:
     try:
         args = parse_args()
         setup_logging(log_level='DEBUG')
-        res = jujuutils.get_application_status(application="ubuntu")
-        print(res)
+
+        backup()
+
         clean_up_libjuju_thread()
     except Exception as exc:
         logging.error(exc)

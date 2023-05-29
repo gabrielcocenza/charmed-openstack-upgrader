@@ -22,7 +22,7 @@ import yaml
 
 from cou.utils import (
     model,
-    controller,
+    controller, sync_wrapper,
 )
 from cou.utils import generic as generic_utils
 from cou.utils import exceptions as cou_exceptions
@@ -559,3 +559,6 @@ def get_application_ip(application, model_name=None):
                 model_name=model_name)[0]
             ip = model.get_unit_public_address(unit)
     return ip
+
+
+
