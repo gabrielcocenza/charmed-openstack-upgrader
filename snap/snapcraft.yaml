@@ -6,12 +6,12 @@ description: |
   Snap for automatically upgrading Charmed Openstack and related 
   components.
 
-grade: stable
+grade: devel
 confinement: strict
 
 apps:
   cou:
-    command: bin/cou
+    command: bin/cou.wrapper
     aliases: [cou]
     plugs:
       - juju-client-observe
@@ -20,6 +20,12 @@ apps:
       - dot-local-share-juju
 
 parts:
+  cou-wrapper:
+    plugin: dump
+    source: bin
+    organize:
+      cou.wrapper: bin/cou.wrapper
+
   cou:
     plugin: python
     build-packages:
