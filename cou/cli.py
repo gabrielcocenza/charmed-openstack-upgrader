@@ -18,6 +18,7 @@ import argparse
 import logging
 import sys
 
+from cou.steps import UpgradeStep
 from cou.steps.backup import backup
 from cou.steps.plan import plan
 from cou.utils import clean_up_libjuju_thread
@@ -79,6 +80,11 @@ def apply_plan(upgrade_plan):
     for sub_step in upgrade_plan.sub_steps:
         apply_plan(sub_step)
 
+def dump_plan(upgrade_plan: UpgradeStep, ident:int=0):
+    tab = '\t'
+    print(f"{tab*ident}{upgrade_plan.description}")
+    for sub_step in upgrade_plan.sub_steps:
+        dump_plan(sub_step, ident+1)
 
 
 def entrypoint() -> None:
@@ -88,7 +94,10 @@ def entrypoint() -> None:
         setup_logging(log_level=args.loglevel)
 
         upgrade_plan = plan(args)
-        apply_plan(upgrade_plan)
+        if args.dry_run:
+            dump_plan(upgrade_plan)
+        else:
+            apply_plan(upgrade_plan)
 
 
         clean_up_libjuju_thread()
