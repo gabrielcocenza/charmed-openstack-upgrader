@@ -18,14 +18,8 @@ import argparse
 import logging
 import sys
 
-import cou.utils.juju as jujuutils
-import logging
-import os
-
 from cou.steps.backup import backup
-from cou.utils.upgrade_utils import get_database_app, backup_mysql
-import cou.utils.model as model
-
+from cou.steps.plan import plan
 from cou.utils import clean_up_libjuju_thread
 
 
@@ -34,41 +28,70 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="description", formatter_class=argparse.RawDescriptionHelpFormatter
     )
+    parser.add_argument("--dry-run",
+                        default=False,
+                        help="Do not run the upgrade just print out the steps.",
+                        action="store_true")
+    parser.add_argument("--log-level",
+                        default="INFO",
+                        dest="loglevel",
+                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                        help="Set the logging level")
+    parser.add_argument("--interactive",
+                        default=True,
+                        help="Sets the interactive prompts",
+                        action="store_true")
+
     return parser.parse_args()
 
 
 def setup_logging(log_level='INFO'):
     """Do setup for logging.
 
-    :returns: Nothing: This function is executed for its sideffect
+    :returns: Nothing: This function is executed for its side effect
     :rtype: None
     """
     level = getattr(logging, log_level.upper(), None)
     if not isinstance(level, int):
         raise ValueError('Invalid log level: "{}"'.format(log_level))
-    logFormatter = logging.Formatter(
+    log_formatter = logging.Formatter(
         fmt="%(asctime)s [%(levelname)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S")
-    rootLogger = logging.getLogger()
-    rootLogger.setLevel(level)
-    if not rootLogger.hasHandlers():
-        consoleHandler = logging.StreamHandler()
-        consoleHandler.setFormatter(logFormatter)
-        rootLogger.addHandler(consoleHandler)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
+    if not root_logger.hasHandlers():
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(log_formatter)
+        root_logger.addHandler(console_handler)
+
+
+def apply_plan(upgrade_plan):
+    result = input(upgrade_plan.description + "[Continue/abort/skip]")
+    match result:
+        case "C" | "c":
+            if upgrade_plan.function is not None:
+                upgrade_plan.function(upgrade_plan.params) if upgrade_plan.params \
+                    else upgrade_plan.function()
+        case "A" | "a":
+            sys.exit(1)
+        case "S" | "s":
+            pass
+    for sub_step in upgrade_plan.sub_steps:
+        apply_plan(sub_step)
+
 
 
 def entrypoint() -> None:
     """Execute 'charmed-openstack-upgrade' command."""
     try:
         args = parse_args()
-        setup_logging(log_level='DEBUG')
+        setup_logging(log_level=args.loglevel)
 
-        backup()
+        upgrade_plan = plan(args)
+        apply_plan(upgrade_plan)
+
 
         clean_up_libjuju_thread()
     except Exception as exc:
         logging.error(exc)
         sys.exit(1)
-
-
-entrypoint()

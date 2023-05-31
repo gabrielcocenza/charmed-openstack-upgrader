@@ -14,3 +14,18 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Package for charmed openstack upgrade steps."""
+
+from __future__ import annotations
+from typing import List, Callable
+
+
+class UpgradeStep:
+    def __init__(self, description: str, parallel: bool, function: Callable, **params):
+        self.parallel = parallel,
+        self.description = description
+        self.sub_steps: List[UpgradeStep] = list[UpgradeStep]()
+        self.params = params
+        self.function = function
+
+    def add_step(self, step: UpgradeStep) -> None:
+        self.sub_steps.append(step)
