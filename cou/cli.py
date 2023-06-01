@@ -46,6 +46,22 @@ def parse_args(args: Any) -> argparse.Namespace:
     parser.add_argument(
         "--interactive", default=True, help="Sets the interactive prompts", action="store_true"
     )
+    parser.add_argument(
+        "--dry-run",
+        default=False,
+        help="Do not run the upgrade just print out the steps.",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        dest="loglevel",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Set the logging level",
+    )
+    parser.add_argument(
+        "--interactive", default=True, help="Sets the interactive prompts", action="store_true"
+    )
 
     return parser.parse_args(args)
 
