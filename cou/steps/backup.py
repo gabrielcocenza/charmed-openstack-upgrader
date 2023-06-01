@@ -17,25 +17,28 @@
 import logging
 import os
 
-from cou.utils import model
-from cou.utils.upgrade_utils import get_database_app
+from cou.zaza_utils import model
+from cou.zaza_utils.upgrade_utils import get_database_app
 
 
-def backup():
+def backup() -> None:
+    """Backup mysql database of openstack."""
+    logging.info("Backing up mysql database")
+
     mysql_app = get_database_app()
     mysql_leader = model.get_unit_from_name(model.get_lead_unit_name(mysql_app))
 
     logging.info("mysqldump mysql-innodb-cluster DBs ...")
-    action = model.run_action_on_leader(mysql_app, 'mysqldump')
+    action = model.run_action_on_leader(mysql_app, "mysqldump")
     remote_file = action.data["results"]["mysqldump-file"]
     basedir = action.data["parameters"]["basedir"]
 
-    logging.info("Set permissions to read mysql-innodb-cluster:{} ...".format(basedir))
-    model.run_on_leader(mysql_app, "chmod o+rx {}".format(basedir))
+    logging.info("Set permissions to read mysql-innodb-cluster:%s ...", basedir)
+    model.run_on_leader(mysql_app, f"chmod o+rx {basedir}")
 
     local_file = os.path.abspath(os.path.basename(remote_file))
-    logging.info("SCP from  mysql-innodb-cluster:{} to {} ...".format(remote_file, local_file))
+    logging.info("SCP from  mysql-innodb-cluster:%s to %s ...", remote_file, local_file)
     model.scp_from_unit(mysql_leader.name, remote_file, local_file)
 
-    logging.info("Remove permissions to read mysql-innodb-cluster:{} ...".format(basedir))
-    model.run_on_leader(mysql_app, "chmod o-rx {}".format(basedir))
+    logging.info("Remove permissions to read mysql-innodb-cluster:%s ...", basedir)
+    model.run_on_leader(mysql_app, f"chmod o-rx {basedir}")

@@ -42,8 +42,10 @@ ignore-paths = [
   ".tox",
   ".venv",
   ".build",
+  "build",
   "report",
   "tests",
+  "cou/zaza_utils"
 ]
 
 [tool.mypy]
@@ -58,9 +60,11 @@ exclude = [
   ".tox",
   ".venv",
   ".build",
+  "build",
   "lib",
   "report",
   "tests",
+  "cou/zaza_utils"
 ]
 
 [tool.coverage.run]

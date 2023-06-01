@@ -18,11 +18,10 @@ import asyncio
 import concurrent.futures
 import inspect
 import logging
-import time
 import threading
+import time
 from pkgutil import extend_path
 from sys import version_info
-
 
 __path__ = extend_path(__path__, __name__)
 
@@ -58,9 +57,9 @@ def get_or_create_libjuju_thread():
         # wait for that to happen.
         now = time.time()
         while True:
-            if (_libjuju_loop is not None and _libjuju_loop.is_running()):
+            if _libjuju_loop is not None and _libjuju_loop.is_running():
                 break
-            time.sleep(.01)
+            time.sleep(0.01)
             # allow 5 seconds for thead to start
             if time.time() > now + 5.0:
                 raise RuntimeError("Async thread didn't start!")
@@ -114,8 +113,8 @@ def libjuju_thread_run():
             pending_tasks = [p for p in tasklist if not p.done()]
             if pending_tasks:
                 logging.info(
-                    "async -> sync. cleaning up pending tasks: len: {}"
-                    .format(len(pending_tasks)))
+                    "async -> sync. cleaning up pending tasks: len: {}".format(len(pending_tasks))
+                )
                 for pending_task in pending_tasks:
                     pending_task.cancel()
                     try:
@@ -123,9 +122,7 @@ def libjuju_thread_run():
                     except asyncio.CancelledError:
                         pass
                     except Exception as e:
-                        logging.error(
-                            "A pending task caused an exception: {}"
-                            .format(str(e)))
+                        logging.error("A pending task caused an exception: {}".format(str(e)))
             else:
                 break
     _libjuju_loop.close()
@@ -144,17 +141,16 @@ def join_libjuju_thread():
         now = time.time()
         while not _libjuju_loop.is_closed():
             logging.debug("Closing ...")
-            time.sleep(.1)
+            time.sleep(0.1)
             if time.time() > now + LOOP_CLOSE_TIMEOUT:
                 raise RuntimeError(
-                    "Exceeded {} seconds for loop to close"
-                    .format(LOOP_CLOSE_TIMEOUT))
+                    "Exceeded {} seconds for loop to close".format(LOOP_CLOSE_TIMEOUT)
+                )
         logging.debug("joining the loop")
         _libjuju_thread.join(timeout=30.0)
         if _libjuju_thread.is_alive():
             logging.error("The thread didn't die")
-            raise RuntimeError(
-                "libjuju async thread didn't finish after 30seconds")
+            raise RuntimeError("libjuju async thread didn't finish after 30seconds")
         _libjuju_thread = None
 
 
@@ -164,6 +160,7 @@ def clean_up_libjuju_thread():
     if _libjuju_loop is not None:
         # circular import; tricky to remove
         from . import model
+
         sync_wrapper(model.remove_models_memo)()
         join_libjuju_thread()
         _libjuju_run = False
@@ -187,6 +184,7 @@ def sync_wrapper(f, timeout=None):
     :returns: The de-async'd function
     :rtype: function
     """
+
     def _wrapper(*args, **kwargs):
         global _libjuju_loop
 
@@ -200,16 +198,16 @@ def sync_wrapper(f, timeout=None):
 
         # ensure that the thread is created
         get_or_create_libjuju_thread()
-        assert _libjuju_loop is not None and _libjuju_loop.is_running(), \
-            "Background thread must be running by now, so this is a bug"
+        assert (
+            _libjuju_loop is not None and _libjuju_loop.is_running()
+        ), "Background thread must be running by now, so this is a bug"
 
         # Submit the coroutine to a given loop
         future = asyncio.run_coroutine_threadsafe(_runner(), _libjuju_loop)
         try:
             return future.result(timeout)
         except concurrent.futures.TimeoutError:
-            logging.error(
-                'The coroutine took too long, cancelling the task...')
+            logging.error("The coroutine took too long, cancelling the task...")
             future.cancel()
             raise
 

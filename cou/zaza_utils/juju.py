@@ -18,16 +18,15 @@
 import logging
 import os
 from pathlib import Path
+
 import yaml
 
-from cou.utils import (
-    model,
-    controller, sync_wrapper,
-)
-from cou.utils import generic as generic_utils
-from cou.utils import exceptions as cou_exceptions
+from cou.zaza_utils import controller
+from cou.zaza_utils import exceptions as cou_exceptions
+from cou.zaza_utils import generic as generic_utils
+from cou.zaza_utils import model
 
-KUBERNETES_PROVIDER_NAME = 'kubernetes'
+KUBERNETES_PROVIDER_NAME = "kubernetes"
 
 
 def get_application_status(application=None, unit=None, model_name=None):
@@ -85,8 +84,7 @@ def get_full_juju_status(model_name=None):
     return status
 
 
-def is_subordinate_application(application_name, application_status=None,
-                               model_name=None):
+def is_subordinate_application(application_name, application_status=None, model_name=None):
     """Is the given application a subordinate application.
 
     :param application_name: Application name
@@ -98,15 +96,12 @@ def is_subordinate_application(application_name, application_status=None,
     :returns: Whether application_name is a subordinate
     :rtype: bool
     """
-    status = application_status or get_application_status(
-        application_name,
-        model_name=model_name)
+    status = application_status or get_application_status(application_name, model_name=model_name)
     # libjuju used to return None but now returns {} for subordinate units.
     return not status.get("units") and status.get("subordinate-to")
 
 
-def get_principle_applications(application_name, application_status=None,
-                               model_name=None):
+def get_principle_applications(application_name, application_status=None, model_name=None):
     """Get the principle applications that application_name is related to.
 
     :param application_name: Application name
@@ -118,9 +113,7 @@ def get_principle_applications(application_name, application_status=None,
     :returns: List of principle applications
     :rtype: list
     """
-    status = application_status or get_application_status(
-        application_name,
-        model_name=model_name)
+    status = application_status or get_application_status(application_name, model_name=model_name)
     return status.get("subordinate-to")
 
 
@@ -142,8 +135,8 @@ def get_machines_for_application(application, model_name=None):
     # Use the application it is subordinate-to to find machines
     if is_subordinate_application(application, model_name=model_name):
         yield from get_machines_for_application(
-            status.get("subordinate-to")[0],
-            model_name=model_name)
+            status.get("subordinate-to")[0], model_name=model_name
+        )
     else:
         for unit in status.get("units").keys():
             yield status.get("units").get(unit).get("machine")
@@ -162,39 +155,34 @@ def get_unit_name_from_host_name(host_name, application_name, model_name=None):
     :rtype: str or None
     """
     unit = None
-    app_status = get_application_status(application_name,
-                                        model_name=model_name)
+    app_status = get_application_status(application_name, model_name=model_name)
     # If the application is not present there cannot be a matching unit.
     if not app_status:
         return unit
     if is_subordinate_application(
-            application_name, application_status=app_status,
-            model_name=model_name):
+        application_name, application_status=app_status, model_name=model_name
+    ):
         # Find the principle services that the subordinate relates to. There
         # may be multiple.
         principle_services = get_principle_applications(
-            application_name,
-            application_status=app_status,
-            model_name=model_name)
+            application_name, application_status=app_status, model_name=model_name
+        )
         for principle_service in principle_services:
             # Find the principle unit name that matches the provided
             # hostname.
             principle_unit = get_unit_name_from_host_name(
-                host_name,
-                principle_service,
-                model_name=model_name)
+                host_name, principle_service, model_name=model_name
+            )
             # If the subordinate has been related to mulitple principles then
             # principle_service may not be running on host_name.
             if principle_unit:
-                unit_status = get_application_status(
-                    unit=principle_unit,
-                    model_name=model_name)
-                unit_names = list(unit_status['subordinates'].keys())
+                unit_status = get_application_status(unit=principle_unit, model_name=model_name)
+                unit_names = list(unit_status["subordinates"].keys())
                 # The principle may have subordinates related to it other than
                 # the 'application_name' so search through them looking for a
                 # match.
                 for unit_name in unit_names:
-                    if unit_name.split('/')[0] == application_name:
+                    if unit_name.split("/")[0] == application_name:
                         unit = unit_name
     else:
         # Try and match host_name with machine display name:
@@ -203,27 +191,25 @@ def get_unit_name_from_host_name(host_name, application_name, model_name=None):
         # display_name should be present in maas deploys
         for _no in status.machines.keys():
             machine = status.machines.get(_no)
-            if machine.display_name.split('.')[0] == host_name.split('.')[0]:
+            if machine.display_name.split(".")[0] == host_name.split(".")[0]:
                 machine_number = int(_no)
         # If no match was found try and extract machine number from host_name.
         # This is probably a non-maas deploy.
         if machine_number is None:
             try:
                 # Remove domain name if it is present.
-                host_name = host_name.split('.')[0]
+                host_name = host_name.split(".")[0]
                 # Assume that a juju managed hostname always ends in the
                 # machine number.
-                machine_number = int(host_name.split('-')[-1])
+                machine_number = int(host_name.split("-")[-1])
             except ValueError:
-                msg = ("Could not derive machine number from "
-                       "hostname {}").format(host_name)
+                msg = ("Could not derive machine number from " "hostname {}").format(host_name)
                 raise cou_exceptions.MachineNotFound(msg)
         unit_names = [
             u.entity_id
-            for u in model.get_units(
-                application_name=application_name,
-                model_name=model_name)
-            if int(u.data['machine-id']) == machine_number]
+            for u in model.get_units(application_name=application_name, model_name=model_name)
+            if int(u.data["machine-id"]) == machine_number
+        ]
         if unit_names:
             unit = unit_names[0]
     return unit
@@ -239,11 +225,9 @@ def get_unit_name_from_ip_address(ip, application_name, model_name=None):
     :param model_name: Name of model to query.
     :type model_name: str
     """
-    for unit in model.get_units(application_name=application_name,
-                                model_name=model_name):
-        if (unit.data['public-address'] == ip) or (
-                unit.data['private-address'] == ip):
-            return unit.data['name']
+    for unit in model.get_units(application_name=application_name, model_name=model_name):
+        if (unit.data["public-address"] == ip) or (unit.data["private-address"] == ip):
+            return unit.data["name"]
 
 
 def get_machine_status(machine, key=None, model_name=None):
@@ -260,8 +244,8 @@ def get_machine_status(machine, key=None, model_name=None):
     """
     status = get_full_juju_status(model_name=model_name)
     if "lxd" in machine:
-        host = machine.split('/')[0]
-        status = status.machines.get(host)['containers'][machine]
+        host = machine.split("/")[0]
+        status = status.machines.get(host)["containers"][machine]
     else:
         status = status.machines.get(machine)
     if key:
@@ -279,11 +263,7 @@ def get_machine_series(machine, model_name=None):
     :returns: Juju series
     :rtype: string
     """
-    return get_machine_status(
-        machine=machine,
-        key='series',
-        model_name=model_name
-    )
+    return get_machine_status(machine=machine, key="series", model_name=model_name)
 
 
 def get_machine_uuids_for_application(application, model_name=None):
@@ -296,10 +276,8 @@ def get_machine_uuids_for_application(application, model_name=None):
     :returns: List of machine uuuids for an application
     :rtype: list
     """
-    for machine in get_machines_for_application(application,
-                                                model_name=model_name):
-        yield get_machine_status(machine, key="instance-id",
-                                 model_name=model_name)
+    for machine in get_machines_for_application(application, model_name=model_name):
+        yield get_machine_status(machine, key="instance-id", model_name=model_name)
 
 
 def get_provider_type():
@@ -349,11 +327,7 @@ def remote_run(unit, remote_cmd, timeout=None, fatal=None, model_name=None):
     """
     if fatal is None:
         fatal = True
-    result = model.run_on_unit(
-        unit,
-        remote_cmd,
-        model_name=model_name,
-        timeout=timeout)
+    result = model.run_on_unit(unit, remote_cmd, model_name=model_name, timeout=timeout)
     if result:
         if int(result.get("Code")) == 0:
             return result.get("Stdout")
@@ -378,17 +352,14 @@ def _get_unit_names(names, model_name=None):
     """
     result = []
     for name in names:
-        if '/' in name:
+        if "/" in name:
             result.append(name)
         else:
-            result.append(model.get_first_unit_name(
-                name,
-                model_name=model_name))
+            result.append(model.get_first_unit_name(name, model_name=model_name))
     return result
 
 
-def get_relation_from_unit(entity, remote_entity, remote_interface_name,
-                           model_name=None):
+def get_relation_from_unit(entity, remote_entity, remote_interface_name, model_name=None):
     """Get relation data passed between two units.
 
     Get relation data for relation with `remote_interface_name` between
@@ -411,23 +382,24 @@ def get_relation_from_unit(entity, remote_entity, remote_interface_name,
     :rtype: dict
     :raises: model.CommandRunFailed
     """
-    application = entity.split('/')[0]
-    remote_application = remote_entity.split('/')[0]
-    rid = model.get_relation_id(application, remote_application,
-                                model_name=model_name,
-                                remote_interface_name=remote_interface_name)
-    (unit, remote_unit) = _get_unit_names(
-        [entity, remote_entity],
-        model_name=model_name)
-    cmd = 'relation-get --format=yaml -r "{}" - "{}"' .format(rid, remote_unit)
+    application = entity.split("/")[0]
+    remote_application = remote_entity.split("/")[0]
+    rid = model.get_relation_id(
+        application,
+        remote_application,
+        model_name=model_name,
+        remote_interface_name=remote_interface_name,
+    )
+    (unit, remote_unit) = _get_unit_names([entity, remote_entity], model_name=model_name)
+    cmd = 'relation-get --format=yaml -r "{}" - "{}"'.format(rid, remote_unit)
     result = model.run_on_unit(unit, cmd, model_name=model_name)
-    if result and int(result.get('Code')) == 0:
-        return yaml.safe_load(result.get('Stdout'))
+    if result and int(result.get("Code")) == 0:
+        return yaml.safe_load(result.get("Stdout"))
     else:
         raise model.CommandRunFailed(cmd, result)
 
 
-def leader_get(application, key='', model_name=None):
+def leader_get(application, key="", model_name=None):
     """Get leader settings from leader unit of named application.
 
     :param application: Application to get leader settings from.
@@ -438,16 +410,15 @@ def leader_get(application, key='', model_name=None):
     :rtype: dict
     :raises: model.CommandRunFailed
     """
-    cmd = 'leader-get --format=yaml {}'.format(key)
+    cmd = "leader-get --format=yaml {}".format(key)
     result = model.run_on_leader(application, cmd, model_name=model_name)
-    if result and int(result.get('Code')) == 0:
-        return yaml.safe_load(result.get('Stdout'))
+    if result and int(result.get("Code")) == 0:
+        return yaml.safe_load(result.get("Stdout"))
     else:
         raise model.CommandRunFailed(cmd, result)
 
 
-def get_subordinate_units(unit_list, charm_name=None, status=None,
-                          model_name=None):
+def get_subordinate_units(unit_list, charm_name=None, status=None, model_name=None):
     """Get a list of all subordinate units associated with units in unit_list.
 
     Get a list of all subordinate units associated with units in unit_list.
@@ -480,16 +451,15 @@ def get_subordinate_units(unit_list, charm_name=None, status=None,
         status = model.get_status(model_name=model_name)
     sub_units = []
     for unit_name in unit_list:
-        app_name = unit_name.split('/')[0]
-        subs = status.applications[app_name]['units'][unit_name].get(
-            'subordinates') or {}
+        app_name = unit_name.split("/")[0]
+        subs = status.applications[app_name]["units"][unit_name].get("subordinates") or {}
         if charm_name:
             for subordinate_name, unit_data in subs.items():
-                if os.environ.get('TEST_ZAZA_BUG_LP1987332'):
-                    sub_app = subordinate_name.split('/')[0]
-                    charm = status.applications[sub_app]['charm']
+                if os.environ.get("TEST_ZAZA_BUG_LP1987332"):
+                    sub_app = subordinate_name.split("/")[0]
+                    charm = status.applications[sub_app]["charm"]
                 else:
-                    charm = unit_data['charm']
+                    charm = unit_data["charm"]
                 if charm_name in charm:
                     sub_units.append(subordinate_name)
         else:
@@ -503,7 +473,7 @@ def is_k8s_deployment():
     :returns: Whether kubernetes is the provider type for this deployment
     :rtype: Bool
     """
-    provider_type = model.get_model_info().get('provider-type', 'UNKNOWN')
+    provider_type = model.get_model_info().get("provider-type", "UNKNOWN")
     return provider_type == KUBERNETES_PROVIDER_NAME
 
 
@@ -521,7 +491,7 @@ def get_k8s_ingress_ip(application, model_name=None):
     # Get IP from juju status until
     # https://github.com/juju/python-libjuju/issues/735
     # is fixed
-    return status['applications'][application].public_address
+    return status["applications"][application].public_address
 
 
 def get_application_ip(application, model_name=None):
@@ -538,27 +508,18 @@ def get_application_ip(application, model_name=None):
         try:
             ip = get_k8s_ingress_ip(application, model_name=model_name)
         except KeyError:
-            logging.warn(
-                "K8s ingress ip lookup failed for {}".format(application))
-            return ''
+            logging.warn("K8s ingress ip lookup failed for {}".format(application))
+            return ""
     else:
         try:
-            app_config = model.get_application_config(
-                application,
-                model_name=model_name)
+            app_config = model.get_application_config(application, model_name=model_name)
         except KeyError:
-            logging.warn(
-                "Application config missing for {}".format(application))
-            return ''
+            logging.warn("Application config missing for {}".format(application))
+            return ""
         vip = app_config.get("vip", {}).get("value")
         if vip:
             ip = vip
         else:
-            unit = model.get_units(
-                application,
-                model_name=model_name)[0]
+            unit = model.get_units(application, model_name=model_name)[0]
             ip = model.get_unit_public_address(unit)
     return ip
-
-
-

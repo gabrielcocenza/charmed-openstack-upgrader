@@ -74,8 +74,7 @@ class ApplicationNotFound(Exception):
         :type application: string
         :returns: ApplicationNotFound Exception
         """
-        msg = ("{} application was not found in machines.".
-               format(application))
+        msg = "{} application was not found in machines.".format(application)
         super(ApplicationNotFound, self).__init__(msg)
 
 

@@ -16,16 +16,32 @@
 """Package for charmed openstack upgrade steps."""
 
 from __future__ import annotations
-from typing import List, Callable
+
+from typing import Any, Callable, List, Optional
 
 
 class UpgradeStep:
-    def __init__(self, description: str, parallel: bool, function: Callable, **params):
-        self.parallel = parallel,
+    """Represents each upgrade step."""
+
+    def __init__(
+        self,
+        description: str,
+        parallel: bool,
+        function: Optional[Callable],
+        **params: Optional[Any],
+    ):
+        """Initialize upgrade step."""
+        self.parallel = parallel
         self.description = description
         self.sub_steps: List[UpgradeStep] = list[UpgradeStep]()
         self.params = params
         self.function = function
 
     def add_step(self, step: UpgradeStep) -> None:
+        """Add a single step."""
         self.sub_steps.append(step)
+
+    def set_function(self, function: Callable, **params: Any) -> None:
+        """Set the function."""
+        self.params = params
+        self.function = function

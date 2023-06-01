@@ -18,11 +18,12 @@ import asyncio
 import logging
 import os
 import subprocess
+
 import yaml
 
-from cou.utils import model
-from cou.utils import juju as juju_utils
-from cou.utils import exceptions as cou_exceptions
+from cou.zaza_utils import exceptions as cou_exceptions
+from cou.zaza_utils import juju as juju_utils
+from cou.zaza_utils import model
 
 
 def dict_to_yaml(dict_data):
@@ -36,8 +37,7 @@ def dict_to_yaml(dict_data):
     return yaml.dump(dict_data, default_flow_style=False)
 
 
-def get_network_config(net_topology, ignore_env_vars=False,
-                       net_topology_file="network.yaml"):
+def get_network_config(net_topology, ignore_env_vars=False, net_topology_file="network.yaml"):
     """Get network info from environment.
 
     Get network info from network.yaml, override the values if specific
@@ -56,12 +56,10 @@ def get_network_config(net_topology, ignore_env_vars=False,
     if os.path.exists(net_topology_file):
         net_info = get_yaml_config(net_topology_file)[net_topology]
     else:
-        raise Exception("Network topology file: {} not found."
-                        .format(net_topology_file))
+        raise Exception("Network topology file: {} not found.".format(net_topology_file))
 
     if not ignore_env_vars:
-        logging.info("Consuming network environment variables as overrides "
-                     "for the undercloud.")
+        logging.info("Consuming network environment variables as overrides " "for the undercloud.")
         net_info.update(get_undercloud_env_vars())
 
     logging.info("Network info: {}".format(dict_to_yaml(net_info)))
@@ -81,11 +79,11 @@ def get_pkg_version(application, pkg):
     versions = []
     units = model.get_units(application)
     for unit in units:
-        cmd = 'dpkg -l | grep {}'.format(pkg)
+        cmd = "dpkg -l | grep {}".format(pkg)
         out = juju_utils.remote_run(unit.entity_id, cmd)
-        versions.append(out.split('\n')[0].split()[2])
+        versions.append(out.split("\n")[0].split()[2])
     if len(set(versions)) != 1:
-        raise Exception('Unexpected output from pkg version check')
+        raise Exception("Unexpected output from pkg version check")
     return versions[0]
 
 
@@ -124,24 +122,26 @@ def get_undercloud_env_vars():
     """
     # Handle backward compatibile OSCI enviornment variables
     _vars = {}
-    _vars['net_id'] = os.environ.get('NET_ID')
-    _vars['external_dns'] = os.environ.get('NAMESERVER')
-    _vars['default_gateway'] = os.environ.get('GATEWAY')
-    _vars['external_net_cidr'] = os.environ.get('CIDR_EXT')
+    _vars["net_id"] = os.environ.get("NET_ID")
+    _vars["external_dns"] = os.environ.get("NAMESERVER")
+    _vars["default_gateway"] = os.environ.get("GATEWAY")
+    _vars["external_net_cidr"] = os.environ.get("CIDR_EXT")
 
     # Take FIP_RANGE and create start and end floating ips
-    _fip_range = os.environ.get('FIP_RANGE')
-    if _fip_range and ':' in _fip_range:
-        _vars['start_floating_ip'] = os.environ.get('FIP_RANGE').split(':')[0]
-        _vars['end_floating_ip'] = os.environ.get('FIP_RANGE').split(':')[1]
+    _fip_range = os.environ.get("FIP_RANGE")
+    if _fip_range and ":" in _fip_range:
+        _vars["start_floating_ip"] = os.environ.get("FIP_RANGE").split(":")[0]
+        _vars["end_floating_ip"] = os.environ.get("FIP_RANGE").split(":")[1]
 
     # Env var naming consistent with zaza.openstack.configure.network
     # functions takes priority. Override backward compatible settings.
-    _keys = ['default_gateway',
-             'start_floating_ip',
-             'end_floating_ip',
-             'external_dns',
-             'external_net_cidr']
+    _keys = [
+        "default_gateway",
+        "start_floating_ip",
+        "end_floating_ip",
+        "external_dns",
+        "external_net_cidr",
+    ]
     for _key in _keys:
         _val = os.environ.get(_key)
         if _val:
@@ -166,13 +166,13 @@ def get_yaml_config(config_file):
     # Note in its original form get_mojo_config it would do a search pattern
     # through mojo stage directories. This version assumes the yaml file is in
     # the pwd.
-    logging.info('Using config %s' % (config_file))
-    return yaml.safe_load(open(config_file, 'r').read())
+    logging.info("Using config %s" % (config_file))
+    return yaml.safe_load(open(config_file, "r").read())
 
 
-def series_upgrade_non_leaders_first(application, from_series="trusty",
-                                     to_series="xenial",
-                                     completed_machines=[]):
+def series_upgrade_non_leaders_first(
+    application, from_series="trusty", to_series="xenial", completed_machines=[]
+):
     """Series upgrade non leaders first.
 
     Wrap all the functionality to handle series upgrade for charms
@@ -203,39 +203,43 @@ def series_upgrade_non_leaders_first(application, from_series="trusty",
     for unit in non_leaders:
         machine = status["units"][unit]["machine"]
         if machine not in completed_machines:
-            logging.info("Series upgrade non-leader unit: {}"
-                         .format(unit))
-            series_upgrade(unit, machine,
-                           from_series=from_series, to_series=to_series,
-                           origin=None)
+            logging.info("Series upgrade non-leader unit: {}".format(unit))
+            series_upgrade(
+                unit, machine, from_series=from_series, to_series=to_series, origin=None
+            )
             completed_machines.append(machine)
         else:
-            logging.info("Skipping unit: {}. Machine: {} (Application: {}) "
-                         "already upgraded. "
-                         .format(unit, machine, application))
+            logging.info(
+                "Skipping unit: {}. Machine: {} (Application: {}) "
+                "already upgraded. ".format(unit, machine, application)
+            )
             model.block_until_all_units_idle()
 
     # Series upgrade the leader
     machine = status["units"][leader]["machine"]
     logging.info("Series upgrade leader: {}".format(leader))
     if machine not in completed_machines:
-        series_upgrade(leader, machine,
-                       from_series=from_series, to_series=to_series,
-                       origin=None)
+        series_upgrade(leader, machine, from_series=from_series, to_series=to_series, origin=None)
         completed_machines.append(machine)
     else:
-        logging.info("Skipping unit: {}. Machine: {} (Application: {}) "
-                     "already upgraded. "
-                     .format(unit, machine, application))
+        logging.info(
+            "Skipping unit: {}. Machine: {} (Application: {}) "
+            "already upgraded. ".format(unit, machine, application)
+        )
         model.block_until_all_units_idle()
 
 
-def series_upgrade_application(application, pause_non_leader_primary=True,
-                               pause_non_leader_subordinate=True,
-                               from_series="trusty", to_series="xenial",
-                               origin='openstack-origin',
-                               completed_machines=[],
-                               files=None, workaround_script=None):
+def series_upgrade_application(
+    application,
+    pause_non_leader_primary=True,
+    pause_non_leader_subordinate=True,
+    from_series="trusty",
+    to_series="xenial",
+    origin="openstack-origin",
+    completed_machines=[],
+    files=None,
+    workaround_script=None,
+):
     """Series upgrade application.
 
     Wrap all the functionality to handle series upgrade for a given
@@ -296,15 +300,21 @@ def series_upgrade_application(application, pause_non_leader_primary=True,
     # Series upgrade the leader
     logging.info("Series upgrade leader: {}".format(leader))
     if machine not in completed_machines:
-        series_upgrade(leader, machine,
-                       from_series=from_series, to_series=to_series,
-                       origin=origin, workaround_script=workaround_script,
-                       files=files)
+        series_upgrade(
+            leader,
+            machine,
+            from_series=from_series,
+            to_series=to_series,
+            origin=origin,
+            workaround_script=workaround_script,
+            files=files,
+        )
         completed_machines.append(machine)
     else:
-        logging.info("Skipping unit: {}. Machine: {} already upgraded."
-                     "But setting origin on the application {}"
-                     .format(unit, machine, application))
+        logging.info(
+            "Skipping unit: {}. Machine: {} already upgraded."
+            "But setting origin on the application {}".format(unit, machine, application)
+        )
         logging.info("Set origin on {}".format(application))
         set_origin(application, origin)
         model.block_until_all_units_idle()
@@ -313,26 +323,36 @@ def series_upgrade_application(application, pause_non_leader_primary=True,
     for unit in non_leaders:
         machine = status["units"][unit]["machine"]
         if machine not in completed_machines:
-            logging.info("Series upgrade non-leader unit: {}"
-                         .format(unit))
-            series_upgrade(unit, machine,
-                           from_series=from_series, to_series=to_series,
-                           origin=origin, workaround_script=workaround_script,
-                           files=files)
+            logging.info("Series upgrade non-leader unit: {}".format(unit))
+            series_upgrade(
+                unit,
+                machine,
+                from_series=from_series,
+                to_series=to_series,
+                origin=origin,
+                workaround_script=workaround_script,
+                files=files,
+            )
             completed_machines.append(machine)
         else:
-            logging.info("Skipping unit: {}. Machine: {} already upgraded. "
-                         "But setting origin on the application {}"
-                         .format(unit, machine, application))
+            logging.info(
+                "Skipping unit: {}. Machine: {} already upgraded. "
+                "But setting origin on the application {}".format(unit, machine, application)
+            )
             logging.info("Set origin on {}".format(application))
             set_origin(application, origin)
             model.block_until_all_units_idle()
 
 
-def series_upgrade(unit_name, machine_num,
-                   from_series="trusty", to_series="xenial",
-                   origin='openstack-origin',
-                   files=None, workaround_script=None):
+def series_upgrade(
+    unit_name,
+    machine_num,
+    from_series="trusty",
+    to_series="xenial",
+    origin="openstack-origin",
+    files=None,
+    workaround_script=None,
+):
     """Perform series upgrade on a unit.
 
     :param unit_name: Unit Name
@@ -354,22 +374,24 @@ def series_upgrade(unit_name, machine_num,
     :rtype: None
     """
     logging.info("Series upgrade {}".format(unit_name))
-    application = unit_name.split('/')[0]
+    application = unit_name.split("/")[0]
     set_dpkg_non_interactive_on_unit(unit_name)
     logging.info("Prepare series upgrade on {}".format(machine_num))
     model.prepare_series_upgrade(machine_num, to_series=to_series)
-    logging.info("Waiting for workload status 'blocked' on {}"
-                 .format(unit_name))
+    logging.info("Waiting for workload status 'blocked' on {}".format(unit_name))
     model.block_until_unit_wl_status(unit_name, "blocked")
     logging.info("Waiting for model idleness")
     model.block_until_all_units_idle()
-    wrap_do_release_upgrade(unit_name, from_series=from_series,
-                            to_series=to_series, files=files,
-                            workaround_script=workaround_script)
+    wrap_do_release_upgrade(
+        unit_name,
+        from_series=from_series,
+        to_series=to_series,
+        files=files,
+        workaround_script=workaround_script,
+    )
     logging.info("Reboot {}".format(unit_name))
     reboot(unit_name)
-    logging.info("Waiting for workload status 'blocked' on {}"
-                 .format(unit_name))
+    logging.info("Waiting for workload status 'blocked' on {}".format(unit_name))
     model.block_until_unit_wl_status(unit_name, "blocked")
     logging.info("Waiting for model idleness")
     model.block_until_all_units_idle()
@@ -381,8 +403,7 @@ def series_upgrade(unit_name, machine_num,
     logging.info("Complete series upgrade on {}".format(machine_num))
     model.complete_series_upgrade(machine_num)
     model.block_until_all_units_idle()
-    logging.info("Waiting for workload status 'active' on {}"
-                 .format(unit_name))
+    logging.info("Waiting for workload status 'active' on {}".format(unit_name))
     model.block_until_unit_wl_status(unit_name, "active")
     model.block_until_all_units_idle()
     # This step may be performed by juju in the future
@@ -390,7 +411,7 @@ def series_upgrade(unit_name, machine_num,
     model.set_series(application, to_series)
 
 
-def set_origin(application, origin='openstack-origin', pocket='distro'):
+def set_origin(application, origin="openstack-origin", pocket="distro"):
     """Set the configuration option for origin source.
 
     :param application: Name of application to upgrade series
@@ -408,9 +429,9 @@ def set_origin(application, origin='openstack-origin', pocket='distro'):
     model.set_application_config(application, {origin: pocket})
 
 
-def wrap_do_release_upgrade(unit_name, from_series="trusty",
-                            to_series="xenial",
-                            files=None, workaround_script=None):
+def wrap_do_release_upgrade(
+    unit_name, from_series="trusty", to_series="xenial", files=None, workaround_script=None
+):
     """Wrap do release upgrade.
 
     In a production environment this step would be run administratively.
@@ -461,7 +482,7 @@ def run_via_ssh(unit_name, cmd):
     """
     if "sudo" not in cmd:
         cmd = "sudo {}".format(cmd)
-    cmd = ['juju', 'ssh', unit_name, cmd]
+    cmd = ["juju", "ssh", unit_name, cmd]
     logging.info("Running {} on {}".format(cmd, unit_name))
     try:
         subprocess.check_call(cmd)
@@ -478,11 +499,19 @@ def do_release_upgrade(unit_name):
     :returns: None
     :rtype: None
     """
-    logging.info('Upgrading ' + unit_name)
+    logging.info("Upgrading " + unit_name)
     # NOTE: It is necessary to run this via juju ssh rather than juju run due
     # to timeout restrictions and error handling.
-    cmd = ['juju', 'ssh', unit_name, 'sudo', 'DEBIAN_FRONTEND=noninteractive',
-           'do-release-upgrade', '-f', 'DistUpgradeViewNonInteractive']
+    cmd = [
+        "juju",
+        "ssh",
+        unit_name,
+        "sudo",
+        "DEBIAN_FRONTEND=noninteractive",
+        "do-release-upgrade",
+        "-f",
+        "DistUpgradeViewNonInteractive",
+    ]
     try:
         subprocess.check_call(cmd)
     except subprocess.CalledProcessError as e:
@@ -500,7 +529,7 @@ def reboot(unit_name):
     """
     # NOTE: When used with series upgrade the agent will be down.
     # Even juju run will not work
-    cmd = ['juju', 'ssh', unit_name, 'sudo', 'reboot', '&&', 'exit']
+    cmd = ["juju", "ssh", unit_name, "sudo", "reboot", "&&", "exit"]
     try:
         subprocess.check_call(cmd)
     except subprocess.CalledProcessError as e:
@@ -518,8 +547,7 @@ def juju_reboot(unit_name):
     unintended hook execution failure upon reboot (for example, this happens
     with update-status hooks causing intermittent CI failures).
     """
-    cmd = ['juju', 'ssh', unit_name,
-           'sudo juju-run -u {} "juju-reboot --now"'.format(unit_name)]
+    cmd = ["juju", "ssh", unit_name, 'sudo juju-run -u {} "juju-reboot --now"'.format(unit_name)]
     try:
         subprocess.check_call(cmd)
     except subprocess.CalledProcessError as e:
@@ -528,7 +556,8 @@ def juju_reboot(unit_name):
 
 
 def set_dpkg_non_interactive_on_unit(
-        unit_name, apt_conf_d="/etc/apt/apt.conf.d/50unattended-upgrades"):
+    unit_name, apt_conf_d="/etc/apt/apt.conf.d/50unattended-upgrades"
+):
     """Set dpkg options on unit.
 
     :param unit_name: Unit Name
@@ -538,13 +567,13 @@ def set_dpkg_non_interactive_on_unit(
     """
     DPKG_NON_INTERACTIVE = 'DPkg::options { "--force-confdef"; };'
     # Check if the option exists. If not, add it to the apt.conf.d file
-    cmd = ("grep '{option}' {file_name} || echo '{option}' >> {file_name}"
-           .format(option=DPKG_NON_INTERACTIVE, file_name=apt_conf_d))
+    cmd = "grep '{option}' {file_name} || echo '{option}' >> {file_name}".format(
+        option=DPKG_NON_INTERACTIVE, file_name=apt_conf_d
+    )
     model.run_on_unit(unit_name, cmd)
 
 
-def get_process_id_list(unit_name, process_name,
-                        expect_success=True, pgrep_full=False):
+def get_process_id_list(unit_name, process_name, expect_success=True, pgrep_full=False):
     """Get a list of process ID(s).
 
     Get a list of process ID(s) from a single sentry juju unit
@@ -575,8 +604,7 @@ def get_process_id_list(unit_name, process_name,
     error = results.get("Stderr")
     output = results.get("Stdout")
     if code != 0:
-        msg = ('{} `{}` returned {} '
-               '{} with error {}'.format(unit_name, cmd, code, output, error))
+        msg = "{} `{}` returned {} " "{} with error {}".format(unit_name, cmd, code, output, error)
         raise cou_exceptions.ProcessIdsFailed(msg)
     return str(output).split()
 
@@ -599,8 +627,7 @@ def get_unit_process_ids(unit_processes, expect_success=True):
     for unit_name, process_list in unit_processes.items():
         pid_dict[unit_name] = {}
         for process in process_list:
-            pids = get_process_id_list(
-                unit_name, process, expect_success=expect_success)
+            pids = get_process_id_list(unit_name, process, expect_success=expect_success)
             pid_dict[unit_name].update({process: pids})
     return pid_dict
 
@@ -616,63 +643,65 @@ def validate_unit_process_ids(expected, actual):
     :raises: cou_exceptions.ProcessNameMismatch
     :raises: cou_exceptions.PIDCountMismatch
     """
-    logging.debug('Checking units for running processes...')
-    logging.debug('Expected PIDs: {}'.format(expected))
-    logging.debug('Actual PIDs: {}'.format(actual))
+    logging.debug("Checking units for running processes...")
+    logging.debug("Expected PIDs: {}".format(expected))
+    logging.debug("Actual PIDs: {}".format(actual))
 
     if len(actual) != len(expected):
-        msg = ('Unit count mismatch.  expected, actual: {}, '
-               '{} '.format(len(expected), len(actual)))
+        msg = "Unit count mismatch.  expected, actual: {}, " "{} ".format(
+            len(expected), len(actual)
+        )
         raise cou_exceptions.UnitCountMismatch(msg)
 
-    for (e_unit_name, e_proc_names) in expected.items():
+    for e_unit_name, e_proc_names in expected.items():
         if e_unit_name in actual.keys():
             a_proc_names = actual[e_unit_name]
         else:
-            msg = ('Expected unit ({}) not found in actual dict data.'.
-                   format(e_unit_name))
+            msg = "Expected unit ({}) not found in actual dict data.".format(e_unit_name)
             raise cou_exceptions.UnitNotFound(msg)
 
         if len(e_proc_names.keys()) != len(a_proc_names.keys()):
-            msg = ('Process name count mismatch.  expected, actual: {}, '
-                   '{}'.format(len(expected), len(actual)))
+            msg = "Process name count mismatch.  expected, actual: {}, " "{}".format(
+                len(expected), len(actual)
+            )
             raise cou_exceptions.ProcessNameCountMismatch(msg)
 
-        for (e_proc_name, e_pids), (a_proc_name, a_pids) in \
-                zip(e_proc_names.items(), a_proc_names.items()):
+        for (e_proc_name, e_pids), (a_proc_name, a_pids) in zip(
+            e_proc_names.items(), a_proc_names.items()
+        ):
             if e_proc_name != a_proc_name:
-                msg = ('Process name mismatch.  expected, actual: {}, '
-                       '{}'.format(e_proc_name, a_proc_name))
+                msg = "Process name mismatch.  expected, actual: {}, " "{}".format(
+                    e_proc_name, a_proc_name
+                )
                 raise cou_exceptions.ProcessNameMismatch(msg)
 
             a_pids_length = len(a_pids)
-            fail_msg = ('PID count mismatch. {} ({}) expected, actual: '
-                        '{}, {} ({})'.format(e_unit_name, e_proc_name,
-                                             e_pids, a_pids_length,
-                                             a_pids))
+            fail_msg = "PID count mismatch. {} ({}) expected, actual: " "{}, {} ({})".format(
+                e_unit_name, e_proc_name, e_pids, a_pids_length, a_pids
+            )
 
             # If expected is a list, ensure at least one PID quantity match
-            if isinstance(e_pids, list) and \
-                    a_pids_length not in e_pids:
+            if isinstance(e_pids, list) and a_pids_length not in e_pids:
                 raise cou_exceptions.PIDCountMismatch(fail_msg)
             # If expected is not bool and not list,
             # ensure PID quantities match
-            elif not isinstance(e_pids, bool) and \
-                    not isinstance(e_pids, list) and \
-                    a_pids_length != e_pids:
+            elif (
+                not isinstance(e_pids, bool)
+                and not isinstance(e_pids, list)
+                and a_pids_length != e_pids
+            ):
                 raise cou_exceptions.PIDCountMismatch(fail_msg)
             # If expected is bool True, ensure 1 or more PIDs exist
-            elif isinstance(e_pids, bool) and \
-                    e_pids is True and a_pids_length < 1:
+            elif isinstance(e_pids, bool) and e_pids is True and a_pids_length < 1:
                 raise cou_exceptions.PIDCountMismatch(fail_msg)
             # If expected is bool False, ensure 0 PIDs exist
-            elif isinstance(e_pids, bool) and \
-                    e_pids is False and a_pids_length != 0:
+            elif isinstance(e_pids, bool) and e_pids is False and a_pids_length != 0:
                 raise cou_exceptions.PIDCountMismatch(fail_msg)
             else:
-                logging.debug('PID check OK: {} {} {}: '
-                              '{}'.format(e_unit_name, e_proc_name,
-                                          e_pids, a_pids))
+                logging.debug(
+                    "PID check OK: {} {} {}: "
+                    "{}".format(e_unit_name, e_proc_name, e_pids, a_pids)
+                )
     return True
 
 
@@ -705,27 +734,24 @@ async def check_output(cmd, log_stdout=True, log_stderr=True):
     :raises: subprocess.CalledProcessError if returncode !=0
     """
     proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE)
+        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    )
     stdout, stderr = await proc.communicate()
-    stdout = stdout.decode('utf-8')
-    stderr = stderr.decode('utf-8')
+    stdout = stdout.decode("utf-8")
+    stderr = stderr.decode("utf-8")
     if proc.returncode != 0:
         logging.warn("STDOUT: {}".format(stdout))
         logging.warn("STDERR: {}".format(stderr))
         raise subprocess.CalledProcessError(
-            returncode=proc.returncode,
-            cmd=cmd,
-            output=stdout,
-            stderr=stderr)
+            returncode=proc.returncode, cmd=cmd, output=stdout, stderr=stderr
+        )
     else:
         if stderr and log_stderr:
-            logging.info("STDERR: {} ({})".format(stderr, ' '.join(cmd)))
+            logging.info("STDERR: {} ({})".format(stderr, " ".join(cmd)))
         if stdout and log_stdout:
-            logging.info("STDOUT: {} ({})".format(stdout, ' '.join(cmd)))
+            logging.info("STDOUT: {} ({})".format(stdout, " ".join(cmd)))
     return {
-        'Code': str(proc.returncode),
-        'Stderr': stderr,
-        'Stdout': stdout,
+        "Code": str(proc.returncode),
+        "Stderr": stderr,
+        "Stdout": stdout,
     }

@@ -48,20 +48,17 @@ class ReadOnlyDict(collections.OrderedDict):
         try:
             return resolve_immutable(super().__getitem__(key))
         except KeyError:
-            return resolve_immutable(
-                super().__getitem__(key.replace('_', '-')))
+            return resolve_immutable(super().__getitem__(key.replace("_", "-")))
 
     __getattr__ = __getitem__
 
     def __setattr__(self, *_):
         """Set the attribute; disabled."""
-        raise TypeError("{} does not allow setting of attributes"
-                        .format(self.__class__.__name__))
+        raise TypeError("{} does not allow setting of attributes".format(self.__class__.__name__))
 
     def __setitem__(self, *_):
         """Set the item; disabled."""
-        raise TypeError("{} does not allow setting of items"
-                        .format(self.__class__.__name__))
+        raise TypeError("{} does not allow setting of items".format(self.__class__.__name__))
 
     def __serialize__(self):
         """Serialise ourself (the OrderedDict) to a regular dictionary.
@@ -101,8 +98,7 @@ class ReadOnlyList(tuple):
 
     def __setattr__(self, *_):
         """Set the attribute; disabled."""
-        raise TypeError("{} does not allow setting of items"
-                        .format(self.__class__.__name__))
+        raise TypeError("{} does not allow setting of items".format(self.__class__.__name__))
 
     def __iter__(self):
         """Yield values from the list."""
@@ -111,9 +107,9 @@ class ReadOnlyList(tuple):
 
     def __repr__(self):
         """Return human-readable representation of self."""
-        return ("{}(({}))"
-                .format(self.__class__.__name__,
-                        ", ".join(["{}".format(repr(v)) for v in self])))
+        return "{}(({}))".format(
+            self.__class__.__name__, ", ".join(["{}".format(repr(v)) for v in self])
+        )
 
     def __str__(self):
         """Return str() version of self."""
@@ -139,7 +135,6 @@ def resolve_immutable(value):
     """
     if isinstance(value, collections.abc.Mapping):
         return ReadOnlyDict(value)
-    elif (not isinstance(value, str) and
-          isinstance(value, collections.abc.Sequence)):
+    elif not isinstance(value, str) and isinstance(value, collections.abc.Sequence):
         return ReadOnlyList(value)
     return value

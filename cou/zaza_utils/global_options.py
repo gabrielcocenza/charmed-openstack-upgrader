@@ -18,7 +18,7 @@
 import collections
 import enum
 
-from cou.utils import ro_types
+from cou.zaza_utils import ro_types
 
 # This file maintains and helps manage a set of global options that are
 # available to test functions for the duration of the test.  This started life
@@ -92,7 +92,8 @@ def _keys_to_level_types(keys, use_list=True):
         level_types.append(
             LevelType.LIST
             if use_list and key.isnumeric() and str(int(key)) == key
-            else LevelType.DICT)
+            else LevelType.DICT
+        )
     return level_types
 
 
@@ -106,8 +107,7 @@ def _ref_to_level_type(ref):
     """
     if isinstance(ref, collections.abc.Mapping):
         return LevelType.DICT
-    elif (not isinstance(ref, str) and
-          isinstance(ref, collections.abc.Sequence)):
+    elif not isinstance(ref, str) and isinstance(ref, collections.abc.Sequence):
         return LevelType.LIST
     return LevelType.LEAF
 
@@ -169,7 +169,7 @@ def set_option(option, value, override=False, use_list=True):
     :param override: if True, override values into keys.
     :type override: bool
     """
-    keys = option.split('.')
+    keys = option.split(".")
     last_index = len(keys) - 1
     levels = []
     options = get_raw_options()
@@ -187,8 +187,8 @@ def set_option(option, value, override=False, use_list=True):
             else:
                 raise ValueError(
                     "Can't set key on value type with override=False: "
-                    "key={}, value at location: {}"
-                    .format(".".join(keys[:i]), options))
+                    "key={}, value at location: {}".format(".".join(keys[:i]), options)
+                )
 
         if i < last_index:
             # attempt to recurse into options
@@ -245,7 +245,7 @@ def get_option(option, default=None, raise_exception=False):
     :raises: KeyError if key is not found and raise_exception is true
     :returns: ANY
     """
-    keys = option.split('.')
+    keys = option.split(".")
     options = get_raw_options()
 
     key_types = _keys_to_level_types(keys, True)
@@ -257,8 +257,8 @@ def get_option(option, default=None, raise_exception=False):
             except (KeyError, IndexError):
                 if raise_exception:
                     raise KeyError(
-                        "Couldn't find {} option at {}"
-                        .format(option, ".".join(keys[:i])))
+                        "Couldn't find {} option at {}".format(option, ".".join(keys[:i]))
+                    )
                 return default
         elif option_type == LevelType.DICT:
             try:
@@ -267,12 +267,13 @@ def get_option(option, default=None, raise_exception=False):
             except KeyError:
                 if raise_exception:
                     raise KeyError(
-                        "Couldn't find {} option at {} (forced to int)"
-                        .format(option, ".".join(keys[:i])))
+                        "Couldn't find {} option at {} (forced to int)".format(
+                            option, ".".join(keys[:i])
+                        )
+                    )
                 return default
         elif raise_exception:
-            raise KeyError(
-                "No option {} at {}".format(option, ".".join(keys[:i])))
+            raise KeyError("No option {} at {}".format(option, ".".join(keys[:i])))
         else:
             return default
     return ro_types.resolve_immutable(options)
@@ -314,22 +315,19 @@ def merge(data, override=False):
                     elif override:
                         ref[k] = v_data
                     else:
-                        raise KeyError("Can't merge data at {} and {}"
-                                       .format(ref, k))
+                        raise KeyError("Can't merge data at {} and {}".format(ref, k))
                 else:
                     ref[k] = v_data
             return ref
         elif type_ref == LevelType.LIST:
             for i in range(0, len(_data)):
                 try:
-                    if (_ref_to_level_type(ref[i]) ==
-                            _ref_to_level_type(_data[i])):
+                    if _ref_to_level_type(ref[i]) == _ref_to_level_type(_data[i]):
                         ref[i] = _merge(ref[i], _data[i])
                     elif override:
                         ref[i] = _data[i]
                     else:
-                        raise KeyError("Can't merge data at {} and {}"
-                                       .format(ref, i))
+                        raise KeyError("Can't merge data at {} and {}".format(ref, i))
                 except IndexError:
                     ref.append(_data[i])
             return ref
