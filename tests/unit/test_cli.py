@@ -7,7 +7,7 @@ import pytest
 from cou.cli import entrypoint, parse_args, setup_logging
 
 
-class TestCliTestCase(unittest.TestCase):
+class CliTestCase(unittest.TestCase):
     def test_parse_args(self):
         args = ["--dry-run", "--log-level", "DEBUG", "--interactive"]
         parsed_args = parse_args(args)
