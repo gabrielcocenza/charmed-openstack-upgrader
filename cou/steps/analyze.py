@@ -13,11 +13,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Functions for analyze openstack cloud before upgrade."""
+"""Functions for analyzing an OpenStack cloud before an upgrade."""
 from __future__ import annotations
 
 import logging
-import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Dict, Tuple, Union
@@ -35,7 +34,10 @@ from cou.utils.juju_utils import (
 )
 from cou.utils.openstack import CHARM_TYPES, get_os_code_info
 from cou.utils.os_versions import CompareOpenStack
-from cou.utils.upgrade_utils import determine_next_openstack_release
+from cou.utils.upgrade_utils import (
+    determine_next_openstack_release,
+    extract_charm_name_from_url,
+)
 
 colorama_init()
 
@@ -95,8 +97,8 @@ class Application:
     pkg_version_units: defaultdict[str, set] = field(default_factory=lambda: defaultdict(set))
 
     async def fill(self) -> Application:
-        """Initiate the Apllication dataclass."""
-        self.charm = self.extract_charm_name()
+        """Initialize the Application dataclass."""
+        self.charm = extract_charm_name_from_url(self.status.charm)
         self.channel = self.status.charm_channel
         self.charm_origin = self.status.charm.split(":")[0]
         self.pkg_name = self.get_pkg_name()
@@ -113,7 +115,7 @@ class Application:
 
     def __eq__(self, other: Any) -> Any:
         """Equal magic method for Application."""
-        return other.name == self.name
+        return other.name == self.name and other.charm == self.charm
 
     def to_dict(self) -> Dict:
         """Return a string in yaml format.
@@ -139,30 +141,25 @@ class Application:
             }
         }
 
-    def extract_charm_name(self) -> str:
-        """Extract the charm name using regex."""
-        match = re.match(
-            r"^(?:\w+:)?(?:~[\w\.-]+/)?(?:\w+/)*([a-zA-Z0-9-]+?)(?:-\d+)?$", self.status.charm
-        )
-        if not match:
-            raise InvalidCharmNameError(f"charm name '{self.status.charm}' is invalid")
-        return match.group(1)
-
     def get_pkg_name(self) -> str:
         """Get the package name depending on the name of the charm."""
         try:
             pkg_name = CHARM_TYPES[self.charm]["pkg"]
         except KeyError:
-            logging.debug("package not found for application: %s", self.name)
+            logging.warning("package not found for application: %s", self.name)
             pkg_name = ""
         return pkg_name
+
+    def get_pkg_version(self, unit: str) -> str:
+        """Get the openstack package version in a unit."""
+        return self.status.units[unit].workload_version
 
     # NOTE (gabrielcocenza) Ideally, the application should provide the openstack version
     # and packages versions by a charm action. This might be possible with Sunbeam.
     async def get_current_os_versions(self, unit: str) -> str:
         """Get the openstack version of a unit."""
         version = ""
-        pkg_version = await get_pkg_version(unit, self.pkg_name, self.model_name)
+        pkg_version = self.get_pkg_version(unit)
         self.units[unit]["pkg_version"] = pkg_version
         self.pkg_version_units[pkg_version].add(unit)
 
@@ -284,14 +281,7 @@ async def get_openstack_release(
     except CommandRunFailed:
         logging.debug("Fall back to version check for OpenStack codename")
         return None
-    return out["Stdout"]
-
-
-async def get_pkg_version(unit: str, pkg: str, model_name: Union[str, None] = None) -> str:
-    """Get package version of a specific package in a unit."""
-    cmd = f"dpkg-query --show --showformat='${{Version}}' {pkg}"
-    out = await async_run_on_unit(unit, cmd, model_name=model_name, timeout=20)
-    return out["Stdout"]
+    return out["Stdout"].strip()
 
 
 async def generate_model() -> set[Application]:
@@ -308,8 +298,7 @@ async def generate_model() -> set[Application]:
         for app, app_status in juju_status.applications.items()
     }
     # NOTE(gabrielcocenza) Not all openstack-charms are mapped in the zaza lookup.
-    supported_os_charms = CHARM_TYPES.keys()
-    openstack_apps = {app for app in apps if app.charm in supported_os_charms}
+    openstack_apps = {app for app in apps if app.charm in CHARM_TYPES}
     not_supported_apps = apps - openstack_apps
     not_supported_apps_names = sorted([app.name for app in not_supported_apps])
     logging.warning(
@@ -320,7 +309,7 @@ async def generate_model() -> set[Application]:
 
 async def analyze() -> Analyze:
     """Analyze the deployment before planning."""
-    logging.info("Analyzing the openstack release in the deployment...")
+    logging.info("Analyzing the Openstack deployment...")
     apps = await generate_model()
     # E.g: {"ussuri": {"keystone"}, "victoria": {"cinder"}}
     os_versions: defaultdict[str, set] = defaultdict(set)
@@ -334,7 +323,7 @@ async def analyze() -> Analyze:
     change_channel: defaultdict[str, set] = defaultdict(set)
 
     #  E.g: {"ussuri/stable": {"keystone"}} this means that keystone should
-    # migrate from charstore to charmhub on channel "ussuri/stable"
+    # migrate from charmstore to charmhub on channel "ussuri/stable"
     charmhub_migration: defaultdict[str, set] = defaultdict(set)
 
     # E.g: {"distro": {"keystone"}} this means that keystone should change
